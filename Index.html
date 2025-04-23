@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Interactive Calculator</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    /* Base and theme styles */
+    body { margin: 0; font-family: Arial, sans-serif; background-color: #1c1c1c; color: white; display: flex; flex-direction: column; align-items: center; transition: background-color 0.3s, color 0.3s; }
+    body.light-theme { background-color: #f0f0f0; color: #222; }
+    body.light-theme .navbar { background: #ddd; }
+    body.light-theme .calculator-container, body.light-theme .popup-content { background: white; color: #222; }
+    body.light-theme .buttons button, body.light-theme .popup button, body.light-theme .menu-button, body.light-theme .side-menu-header button { background: #ccc; color: #222; }
+    body.light-theme .side-menu { background: #fff; color: #222; }
+    /* Owned By text color in light theme */
+    body.light-theme #owned-by-panel p { color: #222; }
+
+    /* Animations */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideFromBottom { 0% { opacity: 0; transform: translateY(100px) scale(0.8); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes historyIn { from { opacity: 0; transform: translateY(-100px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes historyOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-100px); } }
+
+    /* Popup styles */
+    .popup { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); display:flex; justify-content:center; align-items:center; animation:fadeIn 0.3s ease-in-out; z-index:2000; }
+    .popup-content { background:#2c2c2c; padding:30px; border-radius:15px; text-align:center; animation:slideFromBottom 1s ease forwards; }
+    .popup input { padding:10px; width:200px; margin:10px; border:none; border-radius:5px; }
+    .popup button { padding:10px 20px; background:#444; color:white; border:none; border-radius:5px; cursor:pointer; width:50%; margin-top:10px; box-sizing:border-box; }
+
+    /* Calculator container */
+    .hidden { display:none; }
+    .calculator-container { max-width:400px; width:100%; position:relative; }
+    .navbar { background:#333; padding:10px; width:100%; box-sizing:border-box; display:flex; justify-content:space-between; align-items:center; }
+    #greeting { font-size:1.2em; }
+    .menu-button { background:#444; border:none; color:white; padding:10px 15px; border-radius:5px; cursor:pointer; }
+
+    /* Side menu */
+    .side-menu { position:fixed; top:0; left:0; height:100%; width:320px; background:#222; transform:translateX(-100%); transition:transform 0.3s ease; padding:20px; box-sizing:border-box; z-index:1000; }
+    .side-menu.active { transform:translateX(0); }
+    .side-menu-header { display:flex; flex-direction:column; margin-bottom:20px; }
+    .side-menu-header button { background:#444; border:none; color:white; padding:10px 15px; border-radius:5px; cursor:pointer; margin-bottom:10px; }
+
+    /* History, profile, settings, owned-by panels */
+    .history-controls, .settings-panel, .profile-controls, #owned-by-panel { margin-bottom:20px; }
+    .settings-panel, .profile-controls { display:none; }
+    .history-controls li, .settings-panel label, .profile-controls label { cursor:pointer; display:block; margin:10px 0; }
+
+    /* Owned By panel */
+    #owned-by-panel { display: none; text-align: center; }
+    #owned-by-panel p { font-size:1.5em; }
+
+    /* Calculator */
+    .calculator { padding:20px; box-sizing:border-box; }
+    #display { width:100%; padding:15px; font-size:1.5em; margin-bottom:10px; background:#2e2e2e; border:none; color:white; border-radius:10px; text-align:right; box-sizing:border-box; }
+    .buttons { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .buttons button { padding:20px; font-size:1.2em; background:#444; color:white; border:none; border-radius:10px; cursor:pointer; transition:background 0.3s; }
+    .buttons button:hover { background:#666; }
+
+    /* No history popup */
+    .no-history-popup { background-color:#f44336; color:white; padding:10px; border-radius:5px; position:fixed; top:20px; left:50%; transform:translateX(-50%); display:none; }
+    .no-history-popup.show { display:block; animation: historyIn 1s ease-out forwards, historyOut 1.5s ease-in-out forwards 2s; }
+
+    .clear-button { background:#f44336; color:white; padding:5px 10px; border:none; border-radius:5px; cursor:pointer; display:none; }
+    .clear-button.visible { display:inline-block; }
+
+    .history-item { display:flex; justify-content:space-between; font-size:1em; margin-bottom:10px; }
+    .history-time { font-size:0.9em; color:#aaa; margin-left:10px; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <!-- Username popup -->
+  <div id="username-popup" class="popup">
+    <div class="popup-content">
+      <h2>Welcome!</h2>
+      <input type="text" id="username-input" placeholder="Enter your name" />
+      <button onclick="submitUsername()">OK</button>
+    </div>
+  </div>
+
+  <!-- Calculator app -->
+  <div id="calculator-app" class="hidden">
+    <div class="calculator-container">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <span id="greeting"><i class="fas fa-calculator"></i> Hii</span>
+        <button class="menu-button" onclick="toggleMenu()">☰ Menu</button>
+      </nav>
+
+      <!-- Side menu -->
+      <div id="side-menu" class="side-menu">
+        <div class="side-menu-header">
+          <button onclick="showSettings()">Settings</button>
+          <button onclick="showHistory()">History</button>
+          <button onclick="showProfile()">Profile</button>
+          <button onclick="showOwnedBy()">Owned By</button>
+        </div>
+
+        <!-- History panel -->
+        <div id="history-panel" class="history-controls">
+          <button id="clear-button" class="clear-button" onclick="clearHistory()">Clear History</button>
+          <ul id="history-list" class="hidden"></ul>
+        </div>
+
+        <!-- Profile panel -->
+        <div id="profile-panel" class="profile-controls">
+          <label for="profile-username">Username:</label>
+          <input type="text" id="profile-username" />
+          <button onclick="updateUsername()">Update</button>
+        </div>
+
+        <!-- Settings panel -->
+        <div id="settings-panel" class="settings-panel">
+          <label><input type="radio" name="theme" value="dark" checked onchange="applyTheme(this.value)" /> Dark Theme</label>
+          <label><input type="radio" name="theme" value="light" onchange="applyTheme(this.value)" /> Light Theme</label>
+        </div>
+
+        <!-- Owned By panel -->
+        <div id="owned-by-panel">
+          <p id="owned-by-text">RAJKRISHNA MAITI</p>
+        </div>
+      </div>
+
+      <!-- Calculator -->
+      <div class="calculator">
+        <input type="text" id="display" readonly />
+        <div class="buttons">
+          <button onclick="appendValue('7')">7</button>
+          <button onclick="appendValue('8')">8</button>
+          <button onclick="appendValue('9')">9</button>
+          <button onclick="appendValue('/')">/</button>
+          <button onclick="appendValue('4')">4</button>
+          <button onclick="appendValue('5')">5</button>
+          <button onclick="appendValue('6')">6</button>
+          <button onclick="appendValue('*')">*</button>
+          <button onclick="appendValue('1')">1</button>
+          <button onclick="appendValue('2')">2</button>
+          <button onclick="appendValue('3')">3</button>
+          <button onclick="appendValue('-')">-</button>
+          <button onclick="appendValue('0')">0</button>
+          <button onclick="appendValue('.')">.</button>
+          <button onclick="clearDisplay()">C</button>
+          <button onclick="appendValue('+')">+</button>
+          <button style="grid-column: span 4;" onclick="calculate()">=</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No history popup -->
+  <div class="no-history-popup" id="no-history-popup">No History</div>
+
+  <script>
+    let username = '';
+
+    function applyTheme(theme) {
+      document.body.classList.toggle('light-theme', theme === 'light');
+      document.getElementById('side-menu').classList.toggle('light-theme', theme === 'light');
+      document.getElementById('owned-by-text').style.color = theme === 'light' ? '#222' : 'white';
+    }
+
+    function showSettings() {
+      document.getElementById('settings-panel').style.display = 'block';
+      document.getElementById('history-panel').style.display = 'none';
+      document.getElementById('profile-panel').style.display = 'none';
+      document.getElementById('owned-by-panel').style.display = 'none';
+    }
+
+    function showHistory() {
+      document.getElementById('settings-panel').style.display = 'none';
+      document.getElementById('history-panel').style.display = 'block';
+      document.getElementById('profile-panel').style.display = 'none';
+      document.getElementById('owned-by-panel').style.display = 'none';
+      const list = document.getElementById('history-list'),
+            btn  = document.getElementById('clear-button');
+      if (!list.children.length) {
+        const pop = document.getElementById('no-history-popup');
+        pop.classList.add('show');
+        setTimeout(() => pop.classList.remove('show'), 3500);
+      } else {
+        list.classList.remove('hidden');
+        btn.classList.add('visible');
+      }
+    }
+
+    function showProfile() {
+      document.getElementById('settings-panel').style.display = 'none';
+      document.getElementById('history-panel').style.display = 'none';
+      document.getElementById('profile-panel').style.display = 'block';
+      document.getElementById('owned-by-panel').style.display = 'none';
+      document.getElementById('profile-username').value = username;
+    }
+
+    function showOwnedBy() {
+      document.getElementById('settings-panel').style.display = 'none';
+      document.getElementById('history-panel').style.display = 'none';
+      document.getElementById('profile-panel').style.display = 'none';
+      document.getElementById('owned-by-panel').style.display = 'block';
+    }
+
+    function getGreeting() {
+      const now = new Date();
+      const mins = now.getHours() * 60 + now.getMinutes();
+      if (mins <= 600) return 'Good Morning';
+      if (mins <= 720) return 'Good Noon';
+      if (mins <= 960) return 'Good Afternoon';
+      if (mins <= 1140) return 'Good Evening';
+      return 'Good Night';
+    }
+
+    function submitUsername() {
+      username = document.getElementById('username-input').value.trim();
+      if (!username) return;
+      document.getElementById('greeting').innerHTML = `<i class="fas fa-calculator"></i> ${getGreeting()} ${username}`;
+      document.getElementById('username-popup').classList.add('hidden');
+      document.getElementById('calculator-app').classList.remove('hidden');
+    }
+
+    function updateUsername() {
+      const nu = document.getElementById('profile-username').value.trim();
+      if (nu && nu !== username) {
+        username = nu;
+        document.getElementById('greeting').innerHTML = `<i class="fas fa-calculator"></i> ${getGreeting()} ${username}`;
+      }
+    }
+
+    function toggleMenu() {
+      const m = document.getElementById('side-menu');
+      m.classList.toggle('active');
+      document.addEventListener('click', function handler(e) {
+        if (!m.contains(e.target) && !e.target.closest('.menu-button')) {
+          m.classList.remove('active');
+          document.removeEventListener('click', handler);
+        }
+      });
+    }
+
+    function appendValue(v) {
+      document.getElementById('display').value += v;
+    }
+
+    function clearDisplay() {
+      document.getElementById('display').value = '';
+    }
+
+    function calculate() {
+      const d   = document.getElementById('display'),
+            expr = d.value.trim();
+      let   res;
+      try {
+        res = eval(expr);
+      } catch {
+        res = 'Error';
+      }
+      d.value = res;
+
+      const ts = new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString();
+      // truncate expressions longer than 8 chars
+      const label = expr.length > 10
+        ? expr.slice(0, 10) + '...'
+        : expr;
+      addToHistory(`${label} = ${res}`, ts);
+    }
+
+    function addToHistory(text, time) {
+      const ul = document.getElementById('history-list'),
+            li = document.createElement('li');
+      li.className = 'history-item';
+      li.innerHTML = `<span>${text}</span><span class="history-time"><br>${time}</span>`;
+      ul.appendChild(li);
+    }
+
+    function clearHistory() {
+      document.getElementById('history-list').innerHTML = '';
+      document.getElementById('clear-button').classList.remove('visible');
+    }
+  </script>
+</body>
+</html>
